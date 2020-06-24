@@ -32,32 +32,35 @@ begin
     
 	Result := indexOfHighestRating;
 end;
-{
-function ElementByFixedFormID(g: IInterface; id: integer): IInterface;
-var
-	i: Integer;
-	rec: IInterface;
-begin
-	for i := 0 to Pred(ElementCount(g)) do begin
-		rec := ElementByIndex(g, i);
-		
-		if FixedFormID(rec) = id then begin
-			AddMessage('Found it!');
-			Result := rec;
-			exit;
-		end;
-	end;
-end;
-}
+
 function GaussianFunction(a: integer; b, c, x: double): double;
 begin
 	Result := a*power(2.718281828, -1*( power((x - b), 2) / (2*c*c) ));
 end;
 
+function CraftingRecipeForItem(item: IInterface): IInterface;
+var
+	i: Integer;
+	rec, bnam: IInterface;
+	edid: String;
+begin
+	for i := 0 to Pred(ReferencedByCount(item)) do begin
+		rec := ReferencedByIndex(item, i);
+		if Signature(rec) = 'COBJ' then begin
+			bnam := ElementByPath(rec, 'BNAM');
+			edid := geev(LinksTo(bnam), 'EDID');
+			if not ((edid = 'CraftingSmithingArmorTable') or (edid = 'CraftingSmithingSharpeningWheel')) then begin
+				Result := rec;
+				exit;
+			end;
+		end;
+	end;
+end;
+
 function Initialize: Integer;
 var
 	lightMaterials: TStringList;
-	materialCountTotals, thisMaterialCount: array[0..5] of integer;
+	materialCountTotals{, remainingMaterialsCount, thisItemMaterialCount}: array[0..5] of integer;
 	sFiles: String;
 	i, j, k, newRating, referenceRating, formID, numArmors, indexOfHighestRating, count: integer;
 	level: double;
@@ -102,8 +105,8 @@ begin
 	//materials.Add('000db8a2'); // Dwarven metal ingot
 	//materials.Add('0005ad99'); // Orichalcum ingot
 	lightMaterials.Add('000db5d2'); // Leather
-	lightMaterials.Add('0005ad9f'); // Refined Moonstone
 	lightMaterials.Add('0005ad93'); // Corundum Ingot
+	lightMaterials.Add('0005ad9f'); // Refined Moonstone
 	lightMaterials.Add('0005ada0'); // Quicksilver Ingot
 	lightMaterials.Add('0005ada1'); // Refined Malachite
 	lightMaterials.Add('0003ada3'); // Dragon Scales
@@ -144,13 +147,21 @@ begin
 		
 		// Calculate the total number of crafting materials
 		for j := 0 to Pred(lightMaterials.Count) do begin
-			count := Round(GaussianFunction(9, (j / (5) * 30) + 6, 2.6, level));
+			count := Round(GaussianFunction(9, (j / (5) * 30) + 6, 2.3, level));
 			AddMessage(IntToStr(count) + ' ' +geev(ObjectToElement(lightMaterials.Objects[j]), 'EDID'));
-			//materialCountTotals[j] := 
+			materialCountTotals[j] := count;
+			
+			// If this material is 4 or less (but above 0),
+			// make sure the previous material is at least 5.
+			if ((j > 0) and (count > 0) and (count < 5)) then begin
+				AddMessage('j: ' + IntToStr(j));
+				if materialCountTotals[j-1] < 4 then
+					materialCountTotals[j-1] := 5;
+			end;
 		end;
 		
-		indexOfHighestRating := IndexOfHighestRating(armor);
-		AddMessage('Index of highest armor rating: ' + IntToStr(indexOfHighestRating));
+		//indexOfHighestRating := IndexOfHighestRating(armor);
+		//AddMessage('Index of highest armor rating: ' + IntToStr(indexOfHighestRating));
 		
 		referenceRating := armor['totalRating'];
 		for j := 0 to Pred(armor.A['pieces'].Count) do begin
@@ -159,8 +170,6 @@ begin
 			// Find the reference to the piece
 			formID := HexStrToInt(item.S['FormID']);
 			AddMessage(IntToHex(formID, 8));
-			
-			//rec := ElementByFixedFormID(g, formID);
 			
 			rec := RecordByFormID(f, formID, false);
 			//AddMessage(geev(rec, 'EDID'));
@@ -174,10 +183,15 @@ begin
 			AddMessage(geev(rec, 'EDID') + '. Armor rating: ' + FloatToStr(item['rating'] / referenceRating * newRating));
 			seev(patchRec, 'DNAM', item['rating'] / referenceRating * newRating);
 			
-			// Calculate the number of each crafting material
-			//for k := 0 to Pred()
+			// Find the crafting recipe
+			rec := CraftingRecipeForItem(rec);
+			AddMessage(geev(rec, 'EDID'));
 			
 			// Update crafting recipe
+			
+			for k := 0 to Pred(materialCountTotals.Count) do begin
+				
+			end;
 		end;
 	end;
 	
