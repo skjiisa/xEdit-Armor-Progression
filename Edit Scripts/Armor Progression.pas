@@ -64,7 +64,7 @@ var
 	sFiles: String;
 	i, j, k, newRating, referenceRating, formID, numArmors, indexOfHighestRating, count: integer;
 	level: double;
-	f, patchFile, rec, patchRec: IInterface;
+	f, patchFile, rec, patchRec, ingredients, ingredient: IInterface;
 	s: String;
 	json, armors, armor, item: TJsonObject;
 	heavy: bool;
@@ -110,18 +110,6 @@ begin
 	lightMaterials.Add('0005ada0'); // Quicksilver Ingot
 	lightMaterials.Add('0005ada1'); // Refined Malachite
 	lightMaterials.Add('0003ada3'); // Dragon Scales
-	
-	// File 0 should be Skyrim.esm or game equivalent
-	f := FileByIndex(0);
-	
-	for i := 0 to Pred(lightMaterials.Count) do begin
-		formID := HexStrToInt(lightMaterials[i]);
-	
-		// I'm honestly not 100% sure what the bool at the end here does lol
-		rec := RecordByFormID(f, formID, false);
-		lightMaterials.Objects[i] := TObject(rec);
-		AddMessage(geev(rec, 'EDID'));
-	end;
 	
 	// Load all of the armors from JSON
 	armors := json.A['armors'];
@@ -174,12 +162,12 @@ begin
 			rec := RecordByFormID(f, formID, false);
 			//AddMessage(geev(rec, 'EDID'));
 			
-			// Copy the element to the patch file
+			// Copy the piece to the patch file
 			AddRequiredElementMasters(rec, patchFile, false);
 			patchRec := wbCopyElementToFile(rec, patchFile, false, true);
 			AddMessage(geev(patchRec, 'EDID'));
 		
-			// Calculate this piece's armor rating
+			// Update this piece's armor rating
 			AddMessage(geev(rec, 'EDID') + '. Armor rating: ' + FloatToStr(item['rating'] / referenceRating * newRating));
 			seev(patchRec, 'DNAM', item['rating'] / referenceRating * newRating);
 			
@@ -187,10 +175,28 @@ begin
 			rec := CraftingRecipeForItem(rec);
 			AddMessage(geev(rec, 'EDID'));
 			
-			// Update crafting recipe
+			// Copy crafting recipe to patch file
+			AddRequiredElementMasters(rec, patchFile, false);
+			patchRec := wbCopyElementToFile(rec, patchFile, false, true);
 			
-			for k := 0 to Pred(materialCountTotals.Count) do begin
+			// Remove old crafting ingredients
+			ingredients := ElementByPath(patchRec, 'Items');
+			for k := 0 to Pred(ElementCount(ingredients)) do begin
+				RemoveByIndex(ingredients, 0, True);
+			end;
+			
+			// Update crafting recipe
+			for k := 0 to Pred(lightMaterials.Count) do begin
+				count := materialCountTotals[k];
+				if count = 0 then
+					continue;
 				
+				ingredient := ElementAssign(ElementByPath(patchRec, 'Items'), HighInteger, nil, False);
+				AddRequiredElementMasters(ingredient, patchFile, false);
+				
+				AddMessage('Adding ingredient: ' + IntToHex(FixedFormID(ObjectToElement(lightMaterials.Objects[k])), 8));
+				senv(ingredient, 'CNTO\Item', HexStrToInt(lightMaterials[k]));
+				seev(ingredient, 'CNTO\Count', count);
 			end;
 		end;
 	end;
